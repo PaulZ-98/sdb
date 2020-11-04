@@ -80,12 +80,25 @@ class Vdev(sdb.Locator, sdb.PrettyPrinter):
         )
         print("".ljust(indent), "-" * 60)
 
+        prev = None
         for vdev in vdevs:
             level = 0
             pvd = vdev.vdev_parent
             while pvd:
                 level += 2
                 pvd = pvd.vdev_parent
+
+            if vdev.vdev_isl2cache and prev and not prev.vdev_isl2cache:
+                print("".ljust(indent), "-".ljust(18), "-".ljust(7),
+                      "-".ljust(4), "".ljust(0), "cache")
+            if vdev.vdev_islog and prev and not prev.vdev_islog:
+                print("".ljust(indent), "-".ljust(18), "-".ljust(7),
+                      "-".ljust(4), "".ljust(0), "logs")
+            if vdev.vdev_isspare and prev and not prev.vdev_isspare:
+                print("".ljust(indent), "-".ljust(18), "-".ljust(7),
+                      "-".ljust(4), "".ljust(0), "spares")
+            if vdev.vdev_isl2cache or vdev.vdev_isspare:
+                level = 2
 
             if int(vdev.vdev_path) != 0:
                 print(
@@ -106,6 +119,7 @@ class Vdev(sdb.Locator, sdb.PrettyPrinter):
                     "".ljust(level),
                     vdev.vdev_ops.vdev_op_type.string_().decode("utf-8"),
                 )
+            prev = vdev
             if self.args.metaslab:
                 metaslabs = sdb.execute_pipeline([vdev], [Metaslab()])
                 Metaslab(self.arg_list).pretty_print(metaslabs, indent + 5)
@@ -124,6 +138,11 @@ class Vdev(sdb.Locator, sdb.PrettyPrinter):
                 yield spa.spa_root_vdev.vdev_child[i]
         else:
             yield from self.from_vdev(spa.spa_root_vdev)
+
+        for j in range(spa.spa_l2cache.sav_count):
+            yield from self.from_vdev(spa.spa_l2cache.sav_vdevs[j])
+        for j in range(spa.spa_spares.sav_count):
+            yield from self.from_vdev(spa.spa_spares.sav_vdevs[j])
 
     @sdb.InputHandler("vdev_t*")
     def from_vdev(self, vdev: drgn.Object) -> Iterable[drgn.Object]:
